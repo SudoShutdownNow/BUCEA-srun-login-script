@@ -7,6 +7,6 @@ def get_md5(password, token):
 
 
 if __name__ == '__main__':
-    password = "15879684798qq"
-    token = "711ab370231392679fe06523b119a8fe096f5ed9bd206b4de8d7b5b994bbc3e5"
+    password = ""
+    token = "a1c4b41f574fd2d9dedee5511741336a37c5ae1f062738493bd4a6ca9ccd5533"
     print(get_md5(password, token))

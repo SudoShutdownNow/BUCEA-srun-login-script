@@ -37,5 +37,5 @@ def get_base64(s):
 
 
 if __name__ == '__main__':
-    r = get_base64("132456")
+    r = get_base64('{"username":"201906030135","password":"zzy15301010","ip":"10.110.214.45","acid":"1","enc_ver":"srun_bx1"}')
     print(r)

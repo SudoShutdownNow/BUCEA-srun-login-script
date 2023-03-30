@@ -9,6 +9,7 @@ from .encryption.srun_md5 import *
 from .encryption.srun_sha1 import *
 from .encryption.srun_base64 import *
 from .encryption.srun_xencode import *
+from urllib.parse import quote
 
 header = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.26 Safari/537.36'
@@ -137,22 +138,27 @@ class LoginManager:
     def _generate_info(self):
         info_params = {
             "username": self.username,
-            "password": self.password,
+            "password":  self.password,
             "ip": self.ip,
-            "acid": self.ac_id,
-            "enc_ver": self.enc
+            "acid": "1", # self.ac_id,
+            "enc_ver": "srun_bx1"# self.enc
         }
-        info = re.sub("'", '"', str(info_params))
-        self.info = re.sub(" ", '', info)
+        info = re.sub("'", '"', str(info_params)) # 单引号改成双引号
+        self.info = re.sub(" ", '', info) # 空格去掉
+        print("info: ", self.info)
 
     @checkinfo
     @checktoken
     def _encrypt_info(self):
+        # self.encrypted_info = "{SRBX1}" + get_base64(get_xencode(self.info, self.token))
         self.encrypted_info = "{SRBX1}" + get_base64(get_xencode(self.info, self.token))
+        print("token: ", self.token)
+        print("encrypted info: ", self.encrypted_info)
 
     @checktoken
     def _generate_md5(self):
         self.md5 = get_md5("", self.token)
+        # print("md5: ", self.md5)
 
     @checkmd5
     def _encrypt_md5(self):
@@ -164,11 +170,12 @@ class LoginManager:
     def _generate_chksum(self):
         self.chkstr = self.token + self.username
         self.chkstr += self.token + self.md5
-        self.chkstr += self.token + self.ac_id
+        self.chkstr += self.token + self.ac_id # "1"
         self.chkstr += self.token + self.ip
-        self.chkstr += self.token + self.n
-        self.chkstr += self.token + self.vtype
+        self.chkstr += self.token + self.n # "200"
+        self.chkstr += self.token + self.vtype # "1"
         self.chkstr += self.token + self.encrypted_info
+        # print("chkstr: ", self.chkstr)
 
     @checkchkstr
     def _encrypt_chksum(self):
@@ -205,7 +212,21 @@ class LoginManager:
             'n': self.n,
             'type': self.vtype
         }
-        self._login_responce = requests.get(self.url_login_api, params=login_info_params, headers=header)
+        login_url = "http://10.1.1.131/cgi-bin/srun_portal?callback=jQuery112406864159535783183_1678368115385&action=login" + \
+            "&username=" + self.username +\
+            "&password=" + quote(self.encrypted_md5)+ \
+            "&os=Windows+10" +\
+            "&name=Windows" +\
+            "&double_stack=0" +\
+            "&chksum=" + self.encrypted_chkstr + \
+            "&info=" + quote(self.encrypted_info) +\
+            "&ac_id=1" + \
+            "&ip=" + self.ip + \
+            "&n=200" + \
+            "&type=1"
+        # print(login_url)
+        self._login_responce = requests.get(login_url)
+        # print(self._login_responce.text)
 
     @checkvars(
         varlist="_login_responce",
