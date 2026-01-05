@@ -37,6 +37,10 @@ class LoginManager:
         self.ac_id = acid
         self.enc = enc
 
+        # dynamic parameters (will be fetched)
+        self.ip = None
+        self.token = None
+
     def login(self, username, password):
         self.username = username
         self.password = password
@@ -46,7 +50,7 @@ class LoginManager:
         self.get_login_responce()
 
     def get_ip(self):
-        print("Step1: Get local ip returned from srun server.")
+        print("Step1: Get local ip and ac_id returned from srun server.")
         self._get_login_page()
         self._resolve_ip_from_login_page()
         print("----------------")
@@ -87,21 +91,30 @@ class LoginManager:
     )
     @infomanage(
         callinfo="Resolving IP from login page html",
-        successinfo="Successfully resolve IP",
-        errorinfo="Failed to resolve IP"
+        successinfo="Successfully resolve IP and AC_ID",
+        errorinfo="Failed to resolve IP or AC_ID"
     )
     def _resolve_ip_from_login_page(self):
         text = self._page_response.text
-        # re1 = r'<script>(.*?)</script>'
-        # myjson = re.findall(re1, text, re.DOTALL)
-        self.ip = re.findall(r'ip     : "(.*\..*\..*\..*)",\n', text)[0]
-        print(self.ip)
 
-    # mytext = json.loads(re.search('\<script\>[.\n]\<script\>',self._page_response.text).group(1))
-    # self.ip = mytext.ip
-    # self.ip = re.search('id="ip" value="(.*?)"', self._page_response.text).group(1)
-    # 这行代码有问题，可能由于命名不同，找不到ip地址
-    # 建大的ip存在<script> varCONFIG.ip里
+        # 提取IP - 使用更通用的正则，忽略冒号周围的空格
+        # 原代码: re.findall(r'ip     : "(.*\..*\..*\..*)",\n', text)[0]
+        # 新代码兼容: ip : "..." 或 ip: "..."
+        try:
+            self.ip = re.search(r'ip\s*:\s*"(.*?)"', text).group(1)
+            print("IP: " + self.ip)
+        except Exception as e:
+            print("Error parsing IP from page content.")
+            raise e
+
+        # 尝试自动提取 AC_ID，如果提取不到则使用默认值
+        try:
+            acid_search = re.search(r'acid\s*:\s*"(.*?)"', text)
+            if acid_search:
+                self.ac_id = acid_search.group(1)
+                print("AC_ID: " + self.ac_id)
+        except Exception:
+            print("Warning: Could not parse AC_ID from page, using default: " + self.ac_id)
 
     @checkip
     @infomanage(
@@ -114,8 +127,10 @@ class LoginManager:
         """
         The 'get_challenge' request aims to ask the server to generate a token
         """
+        # 生成一个随机的时间戳回调名，模拟真实浏览器行为
+        callback_name = "jsonp" + str(int(time.time() * 1000))
         params_get_challenge = {
-            "callback": "jsonp1583251661367",  # This value can be any string, but cannot be absent
+            "callback": callback_name,
             "username": self.username,
             "ip": self.ip
         }
@@ -136,29 +151,28 @@ class LoginManager:
 
     @checkip
     def _generate_info(self):
+        # 使用动态获取的 self.ac_id 替换硬编码的 "1"
         info_params = {
             "username": self.username,
-            "password":  self.password,
+            "password": self.password,
             "ip": self.ip,
-            "acid": "1", # self.ac_id,
-            "enc_ver": "srun_bx1"# self.enc
+            "acid": self.ac_id,
+            "enc_ver": self.enc
         }
-        info = re.sub("'", '"', str(info_params)) # 单引号改成双引号
-        self.info = re.sub(" ", '', info) # 空格去掉
+        info = re.sub("'", '"', str(info_params))  # 单引号改成双引号
+        self.info = re.sub(" ", '', info)  # 空格去掉
         print("info: ", self.info)
 
     @checkinfo
     @checktoken
     def _encrypt_info(self):
-        # self.encrypted_info = "{SRBX1}" + get_base64(get_xencode(self.info, self.token))
         self.encrypted_info = "{SRBX1}" + get_base64(get_xencode(self.info, self.token))
         print("token: ", self.token)
-        print("encrypted info: ", self.encrypted_info)
+        # print("encrypted info: ", self.encrypted_info)
 
     @checktoken
     def _generate_md5(self):
         self.md5 = get_md5("", self.token)
-        # print("md5: ", self.md5)
 
     @checkmd5
     def _encrypt_md5(self):
@@ -170,10 +184,10 @@ class LoginManager:
     def _generate_chksum(self):
         self.chkstr = self.token + self.username
         self.chkstr += self.token + self.md5
-        self.chkstr += self.token + self.ac_id # "1"
+        self.chkstr += self.token + self.ac_id
         self.chkstr += self.token + self.ip
-        self.chkstr += self.token + self.n # "200"
-        self.chkstr += self.token + self.vtype # "1"
+        self.chkstr += self.token + self.n
+        self.chkstr += self.token + self.vtype
         self.chkstr += self.token + self.encrypted_info
         # print("chkstr: ", self.chkstr)
 
@@ -200,33 +214,25 @@ class LoginManager:
         errorinfo="Failed to send login info"
     )
     def _send_login_info(self):
-        login_info_params = {
-            'callback': 'jsonp1583251661368',  # This value can be any string, but cannot be absent
-            'action': 'login',
-            'username': self.username,
-            'password': self.encrypted_md5,
-            'ac_id': self.ac_id,
-            'ip': self.ip,
-            'info': self.encrypted_info,
-            'chksum': self.encrypted_chkstr,
-            'n': self.n,
-            'type': self.vtype
-        }
-        login_url = "http://10.1.1.131/cgi-bin/srun_portal?callback=jQuery112406864159535783183_1678368115385&action=login" + \
-            "&username=" + self.username +\
-            "&password=" + quote(self.encrypted_md5)+ \
-            "&os=Windows+10" +\
-            "&name=Windows" +\
-            "&double_stack=0" +\
-            "&chksum=" + self.encrypted_chkstr + \
-            "&info=" + quote(self.encrypted_info) +\
-            "&ac_id=1" + \
-            "&ip=" + self.ip + \
-            "&n=200" + \
-            "&type=1"
+        callback_name = "jQuery" + str(int(time.time() * 1000))
+        # 修复：构建 URL 时使用动态的 self.ac_id, self.n, self.vtype
+        login_url = self.url_login_api + "?" + \
+                    "callback=" + callback_name + \
+                    "&action=login" + \
+                    "&username=" + self.username + \
+                    "&password=" + quote(self.encrypted_md5) + \
+                    "&os=Windows+10" + \
+                    "&name=Windows" + \
+                    "&double_stack=0" + \
+                    "&chksum=" + self.encrypted_chkstr + \
+                    "&info=" + quote(self.encrypted_info) + \
+                    "&ac_id=" + str(self.ac_id) + \
+                    "&ip=" + self.ip + \
+                    "&n=" + str(self.n) + \
+                    "&type=" + str(self.vtype)
+
         # print(login_url)
-        self._login_responce = requests.get(login_url)
-        # print(self._login_responce.text)
+        self._login_responce = requests.get(login_url, headers=header)
 
     @checkvars(
         varlist="_login_responce",
@@ -238,4 +244,13 @@ class LoginManager:
         errorinfo="Cannot resolve login result. Maybe the srun response format is changed"
     )
     def _resolve_login_responce(self):
-        self._login_result = re.search('"suc_msg":"(.*?)"', self._login_responce.text).group(1)
+        try:
+            # 某些情况下 suc_msg 可能不存在，或者字段名有变，增加容错
+            if '"suc_msg":"' in self._login_responce.text:
+                self._login_result = re.search('"suc_msg":"(.*?)"', self._login_responce.text).group(1)
+            elif '"error_msg":"' in self._login_responce.text:
+                self._login_result = "Error: " + re.search('"error_msg":"(.*?)"', self._login_responce.text).group(1)
+            else:
+                self._login_result = self._login_responce.text  # 返回原始内容供调试
+        except Exception:
+            self._login_result = "Unknown response: " + self._login_responce.text
