@@ -1,0 +1,9 @@
+services:
+  bucea-srun-login:
+    image: miofelix/bucea-srun-login:latest
+    container_name: bucea-srun-login
+    restart: unless-stopped
+    environment:
+      SRUN_USERNAME: ${SRUN_USERNAME:?请设置 SRUN_USERNAME}
+      SRUN_PASSWORD: ${SRUN_PASSWORD:?请设置 SRUN_PASSWORD}
+      CHECK_INTERVAL: ${CHECK_INTERVAL:-10}
