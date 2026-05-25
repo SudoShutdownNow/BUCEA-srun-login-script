@@ -3,6 +3,7 @@ import requests
 import json
 import re
 import socket
+import os
 from BuceaSrunLogin.LoginManager import LoginManager
 
 # 认证服务器检查接口
@@ -99,10 +100,20 @@ def always_login(username, password, checkinterval):
 
 
 if __name__ == "__main__":
-    # 请确认账号密码正确
-    username = ""
-    password = ""  # 记得替换回你的密码
-    checkinterval = 10  # 检测间隔(秒)
+    # 推荐通过环境变量配置；也可把空字符串改成账号密码作为默认值，但不要提交真实密码。
+    # SRUN_USERNAME=你的账号 SRUN_PASSWORD=你的密码 CHECK_INTERVAL=10 python always_online.py
+    username = os.getenv("SRUN_USERNAME", "").strip()
+    password = os.getenv("SRUN_PASSWORD", "")
+    try:
+        checkinterval = int(os.getenv("CHECK_INTERVAL", "10"))  # 检测间隔(秒)
+    except ValueError:
+        raise SystemExit("CHECK_INTERVAL 必须是大于 0 的整数秒数。")
+
+    if not username or not password:
+        raise SystemExit("请通过环境变量 SRUN_USERNAME 和 SRUN_PASSWORD 设置校园网账号密码。")
+
+    if checkinterval <= 0:
+        raise SystemExit("CHECK_INTERVAL 必须是大于 0 的整数秒数。")
 
     print("开始运行掉线自动重连脚本...")
     always_login(username, password, checkinterval)
